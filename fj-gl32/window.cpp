@@ -1,16 +1,15 @@
-#include "window.h"
+#include "api.h"
+#include "universal/concurrent_queue.h"
 #include <cstddef>
-#include <Windows.h>
-#include <Wingdi.h>
-
-#define GL_GLEXT_PROTOTYPES 1
-#define GL3_PROTOTYPES 1
 
 #include <GL/gl.h>
 
 ////////////////////////////////////////////////////////
 // State variables
 ////////////////////////////////////////////////////////
+
+/////
+// TODO: Get a real Atomic API
 
 #define ATOMIC int
 
@@ -33,8 +32,6 @@ ATOMIC clippingrect_w;
 ATOMIC clippingrect_h;
 
 int resolution[2];
-HDC dc;
-HGLRC glc;
 
 GLuint emptyTexture = 0;
 
@@ -55,91 +52,17 @@ inline void resetSetup(void){
 }
 
 ////////////////////////////////////////////////////////
-// Initialization function
-////////////////////////////////////////////////////////
-
-bool InitVideoDriver(HWND window, int screen_width, int screen_height){
-
-	/////
-	//Gather required information from what Sphere gives us
-
-	dc = GetDC(window);
-	glc = wglCreateContext(dc); 
-	wglMakeCurrent(dc, glc);
-	
-	/////
-	//Initialize internal state
-
-	FJ::DrawList drawList = FJ::DrawList();
-
-	resolution[0] = screen_width;
-	resolution[1] = screen_height;
-
-	
-	SET_ATOMIC(screen_frame, 0);
-	SET_ATOMIC(engine_frame, 0);
-	
-	SET_ATOMIC(near_death, 0);
-	
-	SET_ATOMIC(clippingrect_x, 0);
-	SET_ATOMIC(clippingrect_y, 0);
-	SET_ATOMIC(clippingrect_w, screen_width);
-	SET_ATOMIC(clippingrect_h, screen_height);
-
-	/////
-	//Initialize and set up OpenGL
-
-    glViewport(0, 0, resolution[0], resolution[1]);
-    glMatrixMode(GL_PROJECTION);
-    glLoadIdentity();
-    glOrtho(0, resolution[0], resolution[1], 0, -1, 1);
-    glMatrixMode(GL_MODELVIEW);
-    glLoadIdentity();
-	glEnable(GL_TEXTURE_2D);
-    glEnableClientState(GL_TEXTURE_COORD_ARRAY);
-    glEnableClientState(GL_VERTEX_ARRAY);
-    glEnableClientState(GL_COLOR_ARRAY);
-	
-	glEnable(GL_SCISSOR_TEST);
-	
-	/////
-	//Set up texture mapping
-
-	unsigned int fullCoord[] = {0, 0, 1, 0, 1, 1, 0, 1};
-
-    glTexCoordPointer(2, GL_UNSIGNED_INT, 0, fullCoord);
-
-	
-	/////
-	//Set up the empty texture
-
-    glGenTextures(1, &emptyTexture);
-
-	unsigned int fullMask = 0xFFFFFFFF;
-
-    glBindTexture(GL_TEXTURE_2D, emptyTexture);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
-    glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, 1, 1, 0, GL_RGBA, GL_UNSIGNED_BYTE, &fullMask);
-	
-	/////
-	//Mark the GL Texture state as uninitialized.
-
-	resetSetup();
-}
-
-////////////////////////////////////////////////////////
 // Renderer Thread function
 ////////////////////////////////////////////////////////
 
 void ThreadFunction(void){
-	
+
 	FJ::Primitive *prim = NULL;
 
 	while(!GET_ATOMIC(near_death)){
 
 		while (!drawList.try_pop(prim)){
-			Sleep(1);
+			FJ::Sleep(1);
 		}
 
 		prim->setupGL();
@@ -163,7 +86,7 @@ inline void TextureSetup(){
 }
 
 inline void PrimitiveSetup(){
-	
+
 	if(lastSetup == FJ::ePrimitive)
 		return;
 
@@ -187,7 +110,7 @@ void FJ::Operation::TexturePrimitive::textureSetup(void){
 ////////////////////////////////////////////////////////
 
 void FJ::Primitive::setupGL(void){
-	
+
 	textureSetup();
 
 	glVertexPointer(2, GL_INT, 0, coord);
@@ -240,22 +163,13 @@ void FJ::Operation::ClippingRectangleSet::drawGL(){
 
 }
 
-void FJ::Operation::FlipScreen::textureSetup(){
-
-	SwapBuffers(dc);
-
-	while(GET_ATOMIC(screen_frame)>GET_ATOMIC(engine_frame)){}
-
-	SET_ATOMIC(screen_frame, GET_ATOMIC(screen_frame)+1);
-
-}
 
 ////////////////////////////////////////////////////////
 // FJ::Image Class
 ////////////////////////////////////////////////////////
 
 FJ::Image::Image(unsigned int width, unsigned int height, RGBA *pixels){
-	
+
 	w = width;
 	h = height;
 
@@ -265,7 +179,7 @@ FJ::Image::Image(unsigned int width, unsigned int height, RGBA *pixels){
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
     glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, width, height, 0, GL_RGBA, GL_UNSIGNED_BYTE, pixels);
-	
+
 	/////
 	//We bound a texture, so we must flag the texture setup as unkown.
 	resetSetup();
@@ -296,14 +210,6 @@ void GetDriverInfo(DRIVERINFO* driverinfo){
 // Miscellaneous Sphere Video Driver API Functions
 ////////////////////////////////////////////////////////
 
-void ConfigureDriver(HWND parent){
-	return;
-}
-
-void CloseVideoDriver(void){
-	wglDeleteContext(glc);
-}
-
 bool ToggleFullscreen(void){
 	return true;
 }
@@ -313,10 +219,10 @@ bool ToggleFullscreen(void){
 ////////////////////////////////////////////////////////
 
 void FlipScreen(void){
-	
+
 	/////
 	// Wait for the screen to catch up.
-	
+
 	while(GET_ATOMIC(engine_frame)>GET_ATOMIC(screen_frame)){}
 
 	SET_ATOMIC(engine_frame, GET_ATOMIC(engine_frame)+1);
@@ -337,16 +243,16 @@ void SetClippingRectangle(int x, int y, int w, int h){
 
 }
 void GetClippingRectangle(int* x, int* y, int* w, int* h){
-	
+
 	/////
-	// This is an innaccurate result. 
-	// The result may be desynchronized if the clipping rectangle has 
+	// This is an innaccurate result.
+	// The result may be desynchronized if the clipping rectangle has
 	//   been changed since the last FlipScreen synchronization, and
 	//   the engine is ahead of the screen.
-	
+
 	/////
 	// TODO: Make this return an accurate value.
-	
+
 	*x = GET_ATOMIC(clippingrect_x);
 	*y = GET_ATOMIC(clippingrect_y);
 	*w = GET_ATOMIC(clippingrect_w);
@@ -364,7 +270,7 @@ IMAGE CreateImage(int width, int height, RGBA* pixels){
 
 IMAGE CloneImage(IMAGE image){
 	glBindTexture(GL_TEXTURE_2D, image->glname);
-	
+
 	resetSetup();
 }
 
