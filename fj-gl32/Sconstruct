@@ -1,0 +1,66 @@
+import os
+import glob
+import sys
+
+defaultenv	= Environment(ENV = os.environ)
+
+linuxenv        = defaultenv.Clone(tools = ['default', 'textfile'], CCFLAGS = " -mtune=native -msse2 -flto -O2 -std=c++11 -Wcast-align")
+
+windowsenv 	= defaultenv.Clone(CCFLAGS = "/O2 /EHsc")
+
+win32env	= windowsenv.Clone()
+win64env	= windowsenv.Clone()
+
+linux32env	= linuxenv.Clone()
+linux64env	= linuxenv.Clone()
+
+def AddPPDefine(define, conf):
+	s = ""
+	if sys.platform == 'win32' or sys.platform == 'win64':
+		s += ' /D'
+	else:
+		s += ' -D'
+	s+=define
+	s+= ' '
+	conf.env.Append(CCFLAGS = s)
+
+def SetConcurrentQueueHeader(conf):
+	if conf.CheckCXXHeader('tbb/concurrent_queue.h'):
+		AddPPDefine("USE_TBB_CONCURRENT_QUEUE", conf)
+	elif conf.CheckCXXHeader('concurrent_queue.h'):
+		AddPPDefine("USE_NATIVE_CONCURRENT_QUEUE", conf)	
+	else:
+		print 'Error: No concurrent queue implementation found.'
+		if sys.platform == 'win32' or sys.platform == 'win64':
+			print '  If you are using Visual C++, update to at least Visual C++ 2010.'	
+		
+		print '  FJ-GL is designed to use one of the following implementations:'
+		print '  - Intel Thread Building Blocks'
+		print '  - Microsoft Visual C++ extended library'
+		print '  - Windows SDK 7.1 or greater'	
+		sys.exit()	
+
+
+if sys.platform == 'win32' or sys.platform == 'win64':
+	currentenv = win32env.Clone()
+else:
+	if sys.platform == 'linux':
+		currentenv = linux32env.Clone()
+	else:
+		currentenv = linux64env.Clone()
+
+conf = Configure(currentenv)
+SetConcurrentQueueHeader(conf)
+
+currentenv = conf.Finish()
+
+files = ['window.cpp']
+
+files.extend(glob.glob("universal/*.cpp"))
+
+if sys.platform == 'win32' or sys.platform == 'win64':
+	files.extend(glob.glob("windows/*.cpp"))
+else:
+	files.extend(glob.glob("linux/*.cpp"))
+
+currentenv.SharedLibrary("fj-gl", files)
