@@ -1,5 +1,4 @@
 #include "window.h"
-#include "FL/Fl_Window.H"
 #include <cstddef>
 #include <Windows.h>
 #include <Wingdi.h>
@@ -364,12 +363,16 @@ IMAGE CreateImage(int width, int height, RGBA* pixels){
 }
 
 IMAGE CloneImage(IMAGE image){
-	glBindTexture(image->glname);
+	glBindTexture(GL_TEXTURE_2D, image->glname);
 	
 	resetSetup();
 }
 
-IMAGE GrabImage(IMAGE image, int x, int y, int width, int height);
+IMAGE GrabImage(IMAGE image, int x, int y, int width, int height){
+	RGBA *pixels = new RGBA[width*height];
+	glReadPixels(x,  y, width, height,  GL_RGBA,  GL_UNSIGNED_BYTE,  pixels);
+
+}
 void DestroyImage(IMAGE image);
 
 ////////////////////////////////////////////////////////
