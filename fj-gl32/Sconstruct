@@ -14,6 +14,8 @@ win64env	= windowsenv.Clone()
 linux32env	= linuxenv.Clone()
 linux64env	= linuxenv.Clone()
 
+linkTBB = 0
+
 def AddPPDefine(define, conf):
 	s = ""
 	if sys.platform == 'win32' or sys.platform == 'win64':
@@ -27,6 +29,7 @@ def AddPPDefine(define, conf):
 def SetConcurrentQueueHeader(conf):
 	if conf.CheckCXXHeader('tbb/concurrent_queue.h') or conf.CheckCHeader('tbb/concurrent_queue.h'):
 		AddPPDefine("USE_TBB_CONCURRENT_QUEUE", conf)
+		conf.env.Append(LIBS = ['tbb_debug'])
 	elif conf.CheckCXXHeader('concurrent_queue.h') or conf.CheckCHeader('concurrent_queue.h'):
 		AddPPDefine("USE_NATIVE_CONCURRENT_QUEUE", conf)	
 	else:
@@ -43,6 +46,7 @@ def SetConcurrentQueueHeader(conf):
 def SetAtomicAPI(conf):
 	if conf.CheckCXXHeader('tbb/atomic.h') or conf.CheckCHeader('tbb/atomic.h'):
 		AddPPDefine("USE_TBB_ATOMIC", conf)
+		conf.env.Append(LIBS = ['tbb_debug'])
 	elif conf.CheckCXXHeader('atomic.h') or conf.CheckCHeader('atomic.h'):
 		AddPPDefine("USE_NATIVE_ATOMIC", conf)	
 	else:
@@ -52,6 +56,12 @@ def SetAtomicAPI(conf):
 		print '  - Intel Thread Building Blocks'
 		print '  - A C++11 compliant standard library'
 		print '  It is HIGHLY recommended to install one of the supported atomic implementations and recompile.'
+
+def SetThreadLibrary(conf):
+	if conf.CheckLib('pthread'):
+		AddPPDefine("USE_PTHREAD_THREADS", conf)
+		conf.env.Append(LIBS = 'pthread')
+		print 'found pthread.'
 
 if sys.platform == 'win32' or sys.platform == 'win64':
 	currentenv = win32env.Clone()
@@ -64,6 +74,7 @@ else:
 conf = Configure(currentenv)
 SetConcurrentQueueHeader(conf)
 SetAtomicAPI(conf)
+SetThreadLibrary(conf)
 
 currentenv = conf.Finish()
 

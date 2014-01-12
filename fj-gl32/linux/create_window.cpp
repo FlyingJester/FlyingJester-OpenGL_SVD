@@ -2,6 +2,7 @@
 #include "../universal/atomic.h"
 #include "../universal/clipping_rectangle.h"
 #include "../universal/frame_synchro.h"
+#include "../universal/create_thread.h"
 #include "../resolution.h"
 #include "../gltexture_state.h"
 
