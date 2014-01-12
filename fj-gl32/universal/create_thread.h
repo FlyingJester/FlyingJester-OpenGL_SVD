@@ -22,6 +22,13 @@ namespace FJ{
         template<typename R, typename ...A>thread_t CreateThread(R(*ThreadFunc)(A...), A ...args);
 
 
+        void WaitThread(thread_t);
+
+        /////
+        // Quit from the current thread. Only call from a function passed to CreateThread.
+
+        void ExitThread(void);
+
         /////
         // Shorthand for CreateThread for functions that take no arguments and return void.
 

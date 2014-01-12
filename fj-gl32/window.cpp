@@ -4,7 +4,11 @@
 #include "universal/concurrent_queue.h"
 #include "universal/clipping_rectangle.h"
 #include "universal/frame_synchro.h"
+#include "universal/create_thread.h"
+
 #include "gltexture_state.h"
+#include "glblend_state.h"
+
 #include <cstddef>
 
 #include <GL/gl.h>
@@ -26,7 +30,7 @@ FJ::DrawList drawList;
 // Renderer Thread function
 ////////////////////////////////////////////////////////
 
-void ThreadFunction(void){
+void FJ::ThreadFunction(void){
 
 	FJ::Primitive *prim = NULL;
 
@@ -41,6 +45,8 @@ void ThreadFunction(void){
 
 	}
 
+    FJ::Thread::ExitThread();
+
 }
 
 ////////////////////////////////////////////////////////
@@ -48,12 +54,18 @@ void ThreadFunction(void){
 ////////////////////////////////////////////////////////
 
 void FJ::Operation::UntexturePrimitive::textureSetup(void){
+
 	FJ::GLstate::texture::primitiveSetup();
+	FJ::GLstate::blendmode::setBlendMode(FJ::Sphere::BlendMode::bmBlend);
+
 }
 
 void FJ::Operation::TexturePrimitive::textureSetup(void){
+
 	glBindTexture(GL_TEXTURE_2D, texture);
 	FJ::GLstate::texture::textureSetup();
+	FJ::GLstate::blendmode::setBlendMode(blendmode);
+
 }
 
 ////////////////////////////////////////////////////////
@@ -149,12 +161,15 @@ FJ::Image::~Image(){
 // Driver Info functions
 ////////////////////////////////////////////////////////
 
-void GetDriverInfo(DRIVERINFO* driverinfo){
-  driverinfo->name = "Flying Jester OpenGL";
+void GetDriverInfo(FJ::Sphere::DriverInfo_t* driverinfo){
+  driverinfo->name = "FJ-GL";
   driverinfo->author = "Flying Jester";
-  driverinfo->date = "2014";
-  driverinfo->version = "0.9";
-  driverinfo->description = "A more modern OpenGL plugin for Sphere 1.5 and 1.6. Designed to work on NVidia 8800 GT, AMD HD 6850, and Intel 965 Express or greater.";
+  driverinfo->date = __DATE__;
+  driverinfo->version = "0.09";
+  driverinfo->description =     "A more modern OpenGL plugin built for Sphere 1.5 and 1.6.\n\
+                                Designed to work on NVidia 8800 GT, AMD HD 6850, and Intel 965 Express or greater.\n\
+                                Uses OpenGL 2.0 or 3.1, depending on the graphics card it is running on.\n\
+                                Requires Windows, or Pthreads and Intel Thread Building Blocks.";
 }
 
 ////////////////////////////////////////////////////////
@@ -162,6 +177,10 @@ void GetDriverInfo(DRIVERINFO* driverinfo){
 ////////////////////////////////////////////////////////
 
 bool ToggleFullscreen(void){
+
+    /////
+    // TODO: Implement a fullscreen toggle that doesn't crash NVidia's X Server.
+
 	return true;
 }
 
@@ -176,7 +195,7 @@ void FlipScreen(void){
 
 	while(FJ::Atomic::getAtomic(engine_frame)>FJ::Atomic::getAtomic(screen_frame)){}
 
-	FJ::Atomic::setAtomic(engine_frame, FJ::Atomic::getAtomic(engine_frame)+1);
+    FJ::Atomic::incAtomic(engine_frame);
 
 }
 
@@ -230,13 +249,32 @@ IMAGE GrabImage(IMAGE image, int x, int y, int width, int height){
 	glReadPixels(x,  y, width, height,  GL_RGBA,  GL_UNSIGNED_BYTE,  pixels);
 
 }
-void DestroyImage(IMAGE image);
+void DestroyImage(IMAGE image){
+    delete image;
+}
 
 ////////////////////////////////////////////////////////
 // Image Drawing API Functions
 ////////////////////////////////////////////////////////
 
-void BlitImage(IMAGE image, int x, int y, int blendmode);
+void BlitImage(IMAGE image, int x, int y, FJ::Sphere::BlendMode blendmode){
+
+    FJ::Operation::Image *blit = new FJ::Operation::Image();
+
+    blit->coord = new int[4];
+    blit->coord[0] = x;
+    blit->coord[1] = y;
+    blit->coord[2] = x+image->w;
+    blit->coord[3] = y+image->h;
+
+    blit->im = image;
+
+    blit->blendmode = blendmode;
+
+    drawList.push(blit);
+
+}
+
 void BlitImageMask(IMAGE image, int x, int y, int blendmode, RGBA mask, int mask_blendmode);
 void TransformBlitImage(IMAGE image, int x[4], int y[4], int blendmode);
 void TransformBlitImageMask(IMAGE image, int x[4], int y[4], int blendmode, RGBA mask, int mask_blendmode);

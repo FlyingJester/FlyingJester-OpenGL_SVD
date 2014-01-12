@@ -18,6 +18,8 @@ GLXContext FJ::GLX::glc;
 
 using namespace FJ::GLX;
 
+FJ::Thread::thread_t rendererthread;
+
 ////////////////////////////////////////////////////////
 // Initialization function
 ////////////////////////////////////////////////////////
@@ -31,7 +33,7 @@ bool InitVideo(int screen_width, int screen_height, std::string sphere_dir){
     display = XOpenDisplay(":0");
     if(!display){
         fprintf(stderr, "[FJ-GL] Error: Cannot open display :0\n");
-        exit(EXIT_FAILURE);
+        return false;
     }
 
     //////////
@@ -60,13 +62,13 @@ bool InitVideo(int screen_width, int screen_height, std::string sphere_dir){
     GLXFBConfig *fbconfig = glXChooseFBConfig(display, screen, NULL, &element);
     if(!fbconfig){
         fprintf(stderr, "[FJ-GL] Error: Could not get GLX framebuffer configuration\n");
-        exit(EXIT_FAILURE);
+        return false;
     }
 
     XVisualInfo *visualinfo = glXChooseVisual(display, screen, attributes);
     if(!visualinfo){
         fprintf(stderr, "[FJ-GL] Error: Could not get GLX visual information\n");
-        exit(EXIT_FAILURE);
+        return false;
     }
 
     XSetWindowAttributes winattributes;
@@ -132,6 +134,10 @@ bool InitVideo(int screen_width, int screen_height, std::string sphere_dir){
 
 	glEnable(GL_SCISSOR_TEST);
 
+    glEnable(GL_BLEND);
+    glBlendEquation(GL_FUNC_ADD);
+    glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
+
 	/////
 	//Set up texture mapping
 
@@ -156,10 +162,36 @@ bool InitVideo(int screen_width, int screen_height, std::string sphere_dir){
 	//Mark the GL Texture state as uninitialized.
 
 	FJ::GLstate::texture::resetSetup();
+
+	/////
+	// Create OpenGL rendering threads
+
+	rendererthread = FJ::Thread::CreateThread(&FJ::ThreadFunction);
+
+    return true;
+
 }
 
 
 void CloseVideoDriver(void){
+
+    /////
+    // Signal the renderer thread to exit
+
+	FJ::Atomic::setAtomic(near_death, 1);
+
+    /////
+    // Wait for thread to exit
+
+    FJ::Thread::WaitThread(rendererthread);
+
     /////
     // Delete GL Context
+
+    glXMakeCurrent(display, 0, 0);
+    glXDestroyContext(display, glc);
+
+
+    XCloseDisplay(display);
+
 }
