@@ -15,7 +15,6 @@
 
 #include <GL/gl.h>
 
-
 #define EXPORT(x) extern "C" __declspec(dllexport) x
 
 EXPORT(bool  InitVideoDriver(HWND window, int screen_width, int screen_height));

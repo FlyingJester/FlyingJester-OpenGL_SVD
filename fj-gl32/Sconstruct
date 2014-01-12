@@ -25,9 +25,9 @@ def AddPPDefine(define, conf):
 	conf.env.Append(CCFLAGS = s)
 
 def SetConcurrentQueueHeader(conf):
-	if conf.CheckCXXHeader('tbb/concurrent_queue.h'):
+	if conf.CheckCXXHeader('tbb/concurrent_queue.h') or conf.CheckCHeader('tbb/concurrent_queue.h'):
 		AddPPDefine("USE_TBB_CONCURRENT_QUEUE", conf)
-	elif conf.CheckCXXHeader('concurrent_queue.h'):
+	elif conf.CheckCXXHeader('concurrent_queue.h') or conf.CheckCHeader('concurrent_queue.h'):
 		AddPPDefine("USE_NATIVE_CONCURRENT_QUEUE", conf)	
 	else:
 		print 'Error: No concurrent queue implementation found.'
@@ -40,6 +40,18 @@ def SetConcurrentQueueHeader(conf):
 		print '  - Windows SDK 7.1 or greater'	
 		sys.exit()	
 
+def SetAtomicAPI(conf):
+	if conf.CheckCXXHeader('tbb/atomic.h') or conf.CheckCHeader('tbb/atomic.h'):
+		AddPPDefine("USE_TBB_ATOMIC", conf)
+	elif conf.CheckCXXHeader('atomic.h') or conf.CheckCHeader('atomic.h'):
+		AddPPDefine("USE_NATIVE_ATOMIC", conf)	
+	else:
+		print 'Warning: No C++ Atomic variable API found.'
+		print '  Using dummied up atomic API. This will cause strange errors and general bugginess.'
+		print '  FJ-GL is designed to use one of the following implementations:'
+		print '  - Intel Thread Building Blocks'
+		print '  - A C++11 compliant standard library'
+		print '  It is HIGHLY recommended to install one of the supported atomic implementations and recompile.'
 
 if sys.platform == 'win32' or sys.platform == 'win64':
 	currentenv = win32env.Clone()
@@ -51,10 +63,13 @@ else:
 
 conf = Configure(currentenv)
 SetConcurrentQueueHeader(conf)
+SetAtomicAPI(conf)
 
 currentenv = conf.Finish()
 
-files = ['window.cpp']
+files = []
+
+files.extend(glob.glob("*.cpp"))
 
 files.extend(glob.glob("universal/*.cpp"))
 

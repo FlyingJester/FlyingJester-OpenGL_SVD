@@ -13,6 +13,18 @@
 
 #define EXPORT(x) extern "C" x
 
+#include <X11/Xlib.h>
+#include <GL/gl.h>
+#include <GL/glx.h>
+
+namespace FJ{
+    namespace GLX{
+        extern Display *display;
+        extern Window window;
+        extern GLXContext glc;
+    }
+}
+
 EXPORT(bool InitVideo(int w, int h, std::string sphere_dir));
 
 #include "../api.h"

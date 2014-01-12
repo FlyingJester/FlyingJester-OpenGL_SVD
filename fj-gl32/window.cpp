@@ -1,5 +1,10 @@
 #include "api.h"
+#include "resolution.h"
+#include "universal/atomic.h"
 #include "universal/concurrent_queue.h"
+#include "universal/clipping_rectangle.h"
+#include "universal/frame_synchro.h"
+#include "gltexture_state.h"
 #include <cstddef>
 
 #include <GL/gl.h>
@@ -7,31 +12,6 @@
 ////////////////////////////////////////////////////////
 // State variables
 ////////////////////////////////////////////////////////
-
-/////
-// TODO: Get a real Atomic API
-
-#define ATOMIC int
-
-#define SET_ATOMIC(n, to) n=to
-#define GET_ATOMIC(n) n
-
-int lastSetup = FJ::eNone;
-
-ATOMIC screen_frame;
-ATOMIC engine_frame;
-
-ATOMIC near_death;
-
-/////
-// TODO: Implement whole clipping rectangle locking/atomicity
-
-ATOMIC clippingrect_x;
-ATOMIC clippingrect_y;
-ATOMIC clippingrect_w;
-ATOMIC clippingrect_h;
-
-int resolution[2];
 
 GLuint emptyTexture = 0;
 
@@ -42,15 +22,6 @@ FJ::DrawList drawList;
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-
-
-/////
-//Call whenever changing the GL Texture state
-
-inline void resetSetup(void){
-	lastSetup = FJ::eNone;
-}
-
 ////////////////////////////////////////////////////////
 // Renderer Thread function
 ////////////////////////////////////////////////////////
@@ -59,7 +30,7 @@ void ThreadFunction(void){
 
 	FJ::Primitive *prim = NULL;
 
-	while(!GET_ATOMIC(near_death)){
+	while(!FJ::Atomic::getAtomic(near_death)){
 
 		while (!drawList.try_pop(prim)){
 			FJ::Sleep(1);
@@ -76,33 +47,13 @@ void ThreadFunction(void){
 // FJ::Primitive::textureSetup Definitions
 ////////////////////////////////////////////////////////
 
-
-/////
-// May be functionally identical to resetSetup().
-// Maintained as a hook for future use.
-
-inline void TextureSetup(){
-	lastSetup = FJ::eTexture;
-}
-
-inline void PrimitiveSetup(){
-
-	if(lastSetup == FJ::ePrimitive)
-		return;
-
-	lastSetup = FJ::ePrimitive;
-
-    glBindTexture(GL_TEXTURE_2D, emptyTexture);
-
-}
-
 void FJ::Operation::UntexturePrimitive::textureSetup(void){
-	PrimitiveSetup();
+	FJ::GLstate::texture::primitiveSetup();
 }
 
 void FJ::Operation::TexturePrimitive::textureSetup(void){
 	glBindTexture(GL_TEXTURE_2D, texture);
-	TextureSetup();
+	FJ::GLstate::texture::textureSetup();
 }
 
 ////////////////////////////////////////////////////////
@@ -111,7 +62,7 @@ void FJ::Operation::TexturePrimitive::textureSetup(void){
 
 void FJ::Primitive::setupGL(void){
 
-	textureSetup();
+	FJ::GLstate::texture::textureSetup();
 
 	glVertexPointer(2, GL_INT, 0, coord);
 	glColorPointer(4, GL_UNSIGNED_BYTE, 0, color);
@@ -152,10 +103,10 @@ void FJ::Operation::Image::drawGL(){
 void FJ::Operation::ClippingRectangleSet::textureSetup(){
 	glScissor(coord[0], coord[1], coord[2], coord[3]);
 
-	SET_ATOMIC(clippingrect_x, coord[0]);
-	SET_ATOMIC(clippingrect_y, coord[1]);
-	SET_ATOMIC(clippingrect_w, coord[2]);
-	SET_ATOMIC(clippingrect_h, coord[3]);
+	FJ::Atomic::setAtomic(clippingrect_x, coord[0]);
+	FJ::Atomic::setAtomic(clippingrect_y, coord[1]);
+	FJ::Atomic::setAtomic(clippingrect_w, coord[2]);
+	FJ::Atomic::setAtomic(clippingrect_h, coord[3]);
 
 }
 
@@ -182,7 +133,7 @@ FJ::Image::Image(unsigned int width, unsigned int height, RGBA *pixels){
 
 	/////
 	//We bound a texture, so we must flag the texture setup as unkown.
-	resetSetup();
+	FJ::GLstate::texture::resetSetup();
 }
 
 
@@ -223,9 +174,9 @@ void FlipScreen(void){
 	/////
 	// Wait for the screen to catch up.
 
-	while(GET_ATOMIC(engine_frame)>GET_ATOMIC(screen_frame)){}
+	while(FJ::Atomic::getAtomic(engine_frame)>FJ::Atomic::getAtomic(screen_frame)){}
 
-	SET_ATOMIC(engine_frame, GET_ATOMIC(engine_frame)+1);
+	FJ::Atomic::setAtomic(engine_frame, FJ::Atomic::getAtomic(engine_frame)+1);
 
 }
 
@@ -253,10 +204,10 @@ void GetClippingRectangle(int* x, int* y, int* w, int* h){
 	/////
 	// TODO: Make this return an accurate value.
 
-	*x = GET_ATOMIC(clippingrect_x);
-	*y = GET_ATOMIC(clippingrect_y);
-	*w = GET_ATOMIC(clippingrect_w);
-	*h = GET_ATOMIC(clippingrect_h);
+	*x = FJ::Atomic::getAtomic(clippingrect_x);
+	*y = FJ::Atomic::getAtomic(clippingrect_y);
+	*w = FJ::Atomic::getAtomic(clippingrect_w);
+	*h = FJ::Atomic::getAtomic(clippingrect_h);
 
 }
 
@@ -271,7 +222,7 @@ IMAGE CreateImage(int width, int height, RGBA* pixels){
 IMAGE CloneImage(IMAGE image){
 	glBindTexture(GL_TEXTURE_2D, image->glname);
 
-	resetSetup();
+	FJ::GLstate::texture::resetSetup();
 }
 
 IMAGE GrabImage(IMAGE image, int x, int y, int width, int height){
