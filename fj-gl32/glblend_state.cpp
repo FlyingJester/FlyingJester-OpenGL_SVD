@@ -5,7 +5,7 @@
 using namespace FJ::GLstate::blendmode;
 using FJ::Sphere::BlendMode;
 
-FJ::Sphere::BlendMode lastMode = FJ::Sphere::bmNone;
+FJ::Sphere::BlendMode FJ::GLstate::blendmode::lastMode = FJ::Sphere::bmNone;
 
 void resetBlendMode(void){
     FJ::GLstate::blendmode::lastMode = FJ::Sphere::bmNone;

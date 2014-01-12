@@ -33,6 +33,8 @@
 
 #include "universal/concurrent_queue.h"
 
+typedef unsigned int RGBA;
+
 namespace FJ{
 
     void ThreadFunction(void);
@@ -68,11 +70,11 @@ namespace FJ{
 
     }
 
+    typedef RGBA(*BlendMode_ft)(RGBA, RGBA);
+
 }
 
 typedef  FJ::Image* IMAGE;
-
-typedef int RGBA;
 
 extern "C" {
     EXPORT(void GetDriverInfo(FJ::Sphere::DriverInfo_t* driverinfo));
@@ -127,13 +129,27 @@ namespace FJ {
 
 	class Image{
 	public:
+        Image();
 		Image(unsigned int w, unsigned int h, RGBA *pixels);
 		~Image();
 		unsigned int glname;
 
 		unsigned int w, h;
 
+		RGBA *pixels;
+
+
 	};
+
+    /////
+    // An Image that does not store its pixel data.
+    //   It must NOT be used unless its entire lifetime is inside of fj-gl.
+
+    class UnsafeImage : public Image{
+    public:
+		UnsafeImage(unsigned int w, unsigned int h, RGBA *pixels);
+		~UnsafeImage();
+    };
 
 	enum PrimitiveType {ePoint, eLine, ePolygon, eRect, eEllipse, eImage};
 
@@ -172,8 +188,12 @@ namespace FJ {
 		public:
 			virtual void drawGL(void) = 0;
 			void textureSetup();
-			unsigned int texture;
+			virtual unsigned int getTexture(void) const;
+			virtual int getWidth(void) const;
+			virtual int getHeight(void) const;
 			Sphere::BlendMode blendmode;
+			Sphere::BlendMode mask_blendmode;
+			unsigned int texture;
 		};
 
 		struct Point : public UntexturePrimitive{
@@ -184,6 +204,10 @@ namespace FJ {
 			void drawGL(void);
 		};
 
+
+		struct Triangle : public UntexturePrimitive{
+			void drawGL(void);
+		};
 
 		struct Polygon : public UntexturePrimitive{
 			void drawGL(void);
@@ -204,6 +228,9 @@ namespace FJ {
 		struct Image : public TexturePrimitive{
 			void drawGL(void);
 			IMAGE im;
+			virtual unsigned int getTexture(void) const;
+			virtual int getWidth(void) const;
+			virtual int getHeight(void) const;
 		};
 
 	}

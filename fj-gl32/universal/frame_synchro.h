@@ -8,4 +8,6 @@ extern FJ::Atomic::atomic_t engine_frame;
 
 extern FJ::Atomic::atomic_t near_death;
 
+extern FJ::Atomic::atomic_t render_idling;
+
 #endif
