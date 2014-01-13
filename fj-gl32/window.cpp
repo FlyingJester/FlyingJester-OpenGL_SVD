@@ -26,10 +26,12 @@ FJ::DrawList drawList;
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 inline void StarveThreadFunction(void){
-    while(!((!drawList.unsafe_size())&&FJ::Atomic::getAtomic(render_idling))){
+    while(drawList.unsafe_size()){
         /////
         // Busy wait.
     }
+
+    glFinish();
 
     /////
     // The render thread is now starved of operations.
@@ -43,18 +45,58 @@ void FJ::ThreadFunction(void){
 
 	FJ::Primitive *prim = NULL;
 
+	/////
+	//Initialize and set up OpenGL
+    glXMakeCurrent(FJ::GLX::display, FJ::GLX::window, FJ::GLX::glc);
+
+    glViewport(0, 0, FJ::resolution[0], FJ::resolution[1]);
+    glMatrixMode(GL_PROJECTION);
+    glLoadIdentity();
+    glOrtho(0, FJ::resolution[0], FJ::resolution[1], 0, -1, 1);
+    glMatrixMode(GL_MODELVIEW);
+    glLoadIdentity();
+	glEnable(GL_TEXTURE_2D);
+    glEnableClientState(GL_TEXTURE_COORD_ARRAY);
+    glEnableClientState(GL_VERTEX_ARRAY);
+    glEnableClientState(GL_COLOR_ARRAY);
+	glEnable(GL_SCISSOR_TEST);
+
+    glScissor(0, 0, FJ::resolution[0], FJ::resolution[1]);
+
+    glEnable(GL_BLEND);
+    glBlendEquation(GL_FUNC_ADD);
+    glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
+
+    glDepthMask(GL_FALSE);
+
+    glDisable(GL_DEPTH_TEST);
+
+    glClearColor(0.0, 0.0, 1.0, 1.0);
+    glClearDepth(1.0);
+    glClear(GL_COLOR_BUFFER_BIT|GL_DEPTH_BUFFER_BIT);
+    glClearColor(0.0, 0.0, 0.0, 1.0);
+	unsigned int fullCoord[] = {0, 0, 1, 0, 1, 1, 0, 1};
+
+    glTexCoordPointer(2, GL_INT, 0, fullCoord);
+    glXSwapBuffers(FJ::GLX::display, FJ::GLX::window);
+
+
 	while(!FJ::Atomic::getAtomic(near_death)){
 
-
 		while (!drawList.try_pop(prim)){
-            FJ::Atomic::setAtomic(render_idling, 1);
-			FJ::Sleep(1);
-            FJ::Atomic::setAtomic(render_idling, 0);
+
 		}
 
+	FJ::GLstate::texture::resetSetup();
+        if(!prim)
+            continue;
 
 		prim->setupGL();
 		prim->drawGL();
+
+        delete prim;
+
+        prim = NULL;
 
 	}
 
@@ -124,6 +166,23 @@ void FJ::Operation::TexturePrimitive::textureSetup(void){
 // FJ::Primitive::setupGL Definitions
 ////////////////////////////////////////////////////////
 
+FJ::Primitive::Primitive(){
+    color = NULL;
+    coord = NULL;
+
+}
+
+FJ::Primitive::~Primitive(){
+    if(color)
+        delete []color;
+    if(coord)
+        delete []coord;
+}
+
+FJ::Operation::UnsafeImage::~UnsafeImage(){
+    delete im;
+}
+
 void FJ::Primitive::setupGL(void){
 
 	FJ::GLstate::texture::textureSetup();
@@ -161,6 +220,7 @@ void FJ::Operation::Ellipse::drawGL(){
 }
 
 void FJ::Operation::Image::drawGL(){
+
 	glDrawArrays(GL_TRIANGLE_STRIP, 0, 4);
 }
 
@@ -184,6 +244,24 @@ void FJ::Operation::ClippingRectangleSet::drawGL(){
 
 void FJ::Operation::FlipScreen::drawGL(){
 
+    //glFinish();
+   // glXMakeCurrent(FJ::GLX::display, FJ::GLX::window, FJ::GLX::glc);
+    glClear(GL_COLOR_BUFFER_BIT|GL_DEPTH_BUFFER_BIT);
+    #ifndef _WIN32
+
+    //XSync( FJ::GLX::display, False );
+    glXMakeCurrent(FJ::GLX::display, FJ::GLX::window, FJ::GLX::glc);
+    glXSwapBuffers(FJ::GLX::display, FJ::GLX::glxwindow);
+    glXSwapBuffers(FJ::GLX::display, FJ::GLX::window);
+
+    #endif
+
+    GLenum err = glGetError();
+
+    if(err!=GL_NO_ERROR)
+        printf("Error.\n");
+
+
 }
 
 ////////////////////////////////////////////////////////
@@ -199,11 +277,22 @@ FJ::Image::Image(unsigned int width, unsigned int height, RGBA *px){
 	w = width;
 	h = height;
 
-    glGenTextures(1, &glname);
+    if(!(&glname)){
+        printf("[FJ-GL] Error: Could not generate a texture.\n");
+        exit(EXIT_FAILURE);
+    }
 
-    glBindTexture(GL_TEXTURE_2D, emptyTexture);
+    glGenTextures(1, &this->glname);
+
+    if(!glname){
+        printf("[FJ-GL] Error: Could not generate a texture.\n");
+        exit(EXIT_FAILURE);
+    }
+    glBindTexture(GL_TEXTURE_2D, this->glname);
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
+    glBindTexture(GL_TEXTURE_2D, this->glname);
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
+    glBindTexture(GL_TEXTURE_2D, this->glname);
     glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, width, height, 0, GL_RGBA, GL_UNSIGNED_BYTE, px);
 
     this->pixels = new RGBA[width*height];
@@ -225,11 +314,23 @@ FJ::UnsafeImage::UnsafeImage(unsigned int width, unsigned int height, RGBA *px){
 	w = width;
 	h = height;
 
-    glGenTextures(1, &glname);
+    glGenTextures(1, &this->glname);
 
-    glBindTexture(GL_TEXTURE_2D, emptyTexture);
+    if(!glname){
+        printf("[FJ-GL] Error: Could not generate a texture.\n");
+        exit(EXIT_FAILURE);
+    }
+    glBindTexture(GL_TEXTURE_2D, this->glname);
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
+    glBindTexture(GL_TEXTURE_2D, this->glname);
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
+
+    if(!px){
+        printf("[FJ-GL] Error: Null pixels given.\n");
+        exit(EXIT_FAILURE);
+    }
+
+    glBindTexture(GL_TEXTURE_2D, this->glname);
     glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, width, height, 0, GL_RGBA, GL_UNSIGNED_BYTE, px);
 
 	/////
@@ -281,9 +382,13 @@ void FlipScreen(void){
 	/////
 	// Wait for the screen to catch up.
 
-	while(FJ::Atomic::getAtomic(engine_frame)>FJ::Atomic::getAtomic(screen_frame)){}
+	//FJ::Operation::FlipScreen *flipscreen = new FJ::Operation::FlipScreen();
 
-    FJ::Atomic::incAtomic(engine_frame);
+	drawList.push(new FJ::Operation::FlipScreen());
+
+	//while(FJ::Atomic::getAtomic(engine_frame)>FJ::Atomic::getAtomic(screen_frame)){}
+
+    //FJ::Atomic::incAtomic(engine_frame);
 
 }
 
@@ -360,7 +465,10 @@ void BlitImageMask(IMAGE image, int x, int y, FJ::Sphere::BlendMode blendmode, R
 
     blit->color = new RGBA[4];
 
-    std::fill(blit->color, blit->color+(sizeof(RGBA)*3), mask);
+    blit->color[0] = mask;
+    blit->color[1] = mask;
+    blit->color[2] = mask;
+    blit->color[3] = mask;
 
     blit->coord = new int[8];
 
@@ -377,11 +485,12 @@ void BlitImageMask(IMAGE image, int x, int y, FJ::Sphere::BlendMode blendmode, R
 
 }
 
-void TransformBlitImage(IMAGE image, int x[4], int y[4], FJ::Sphere::BlendMode blendmode){
+void TransformBlitImage(IMAGE image, int *x, int *y, FJ::Sphere::BlendMode blendmode){
 
     TransformBlitImageMask(image, x, y, blendmode, 0xFFFFFFFF, FJ::Sphere::bmBlend);
 
 }
+
 void TransformBlitImageMask(IMAGE image, int x[4], int y[4], FJ::Sphere::BlendMode blendmode, RGBA mask, FJ::Sphere::BlendMode mask_blendmode){
 
     FJ::Operation::Image *blit = new FJ::Operation::Image();
@@ -391,7 +500,10 @@ void TransformBlitImageMask(IMAGE image, int x[4], int y[4], FJ::Sphere::BlendMo
 
     blit->color = new RGBA[4];
 
-    std::fill(blit->color, &(blit->color[3]), mask);
+    blit->color[0] = mask;
+    blit->color[1] = mask;
+    blit->color[2] = mask;
+    blit->color[3] = mask;
 
     blit->coord = new int[8];
 
@@ -433,9 +545,13 @@ RGBA* LockImage(IMAGE image){
 
 }
 void UnlockImage(IMAGE image){
+    glFinish();
+
     FJ::GLstate::texture::resetSetup();
     glBindTexture(GL_TEXTURE_2D, image->glname);
     glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, image->w, image->h, 0, GL_RGBA, GL_UNSIGNED_BYTE, image->pixels);
+    glFinish();
+
 }
 
 ////////////////////////////////////////////////////////
@@ -444,10 +560,39 @@ void UnlockImage(IMAGE image){
 
 void DirectBlit(int x, int y, int w, int h, RGBA* pixels){
 
-    StarveThreadFunction();
+    IMAGE image = new FJ::UnsafeImage(w, h, pixels);
 
-    glRasterPos2i(x, y);
-    glDrawPixels(w, h, GL_RGBA, GL_UNSIGNED_BYTE, pixels);
+    FJ::Operation::Image *blit = new FJ::Operation::Image();
+    blit->im = image;
+    blit->blendmode = FJ::Sphere::bmBlend;
+    blit->mask_blendmode = FJ::Sphere::bmBlend;
+
+    blit->color = new RGBA[4];
+
+    unsigned int mask = 0xFFFFFF;
+
+    blit->color[0] = mask;
+    blit->color[1] = mask;
+    blit->color[2] = mask;
+    blit->color[3] = mask;
+
+    blit->coord = new int[8];
+
+    blit->coord[0] = x;
+    blit->coord[1] = y;
+    blit->coord[2] = x+w;
+    blit->coord[3] = y;
+    blit->coord[4] = x+w;
+    blit->coord[5] = y+h;
+    blit->coord[6] = x;
+    blit->coord[7] = y+h;
+
+    drawList.push(blit);
+
+    //StarveThreadFunction();
+
+    //delete image;
+
 
 }
 void DirectTransformBlit(int x[4], int y[4], int w, int h, RGBA* pixels){
@@ -463,7 +608,10 @@ void DirectTransformBlit(int x[4], int y[4], int w, int h, RGBA* pixels){
 
     unsigned int mask = 0xFFFFFF;
 
-    std::fill(blit->color, &(blit->color[3]), mask);
+    blit->color[0] = mask;
+    blit->color[1] = mask;
+    blit->color[2] = mask;
+    blit->color[3] = mask;
 
     blit->coord = new int[8];
 
@@ -594,7 +742,9 @@ void DrawPolygon(int** points, int length, int invert, RGBA color){
 
     poly->color = new RGBA[length];
 
-    std::fill(poly->color, poly->color+(length*sizeof(RGBA)), color);
+    for(int i = 0; i<length; i++){
+        poly->color[i] = color;
+    }
 
     if(!invert){
 
@@ -632,7 +782,10 @@ void DrawOutlinedRectangle(int x, int y, int w, int h, int size, RGBA color){
 
     rect->outline = true;
 
-    std::fill(rect->color, rect->color+(3*sizeof(RGBA)), color);
+    rect->color[0] = color;
+    rect->color[1] = color;
+    rect->color[2] = color;
+    rect->color[3] = color;
 
     rect->coord = new int[8];
 

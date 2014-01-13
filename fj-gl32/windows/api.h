@@ -18,7 +18,9 @@
 #define EXPORT(x) extern "C" __declspec(dllexport) x
 
 EXPORT(bool  InitVideoDriver(HWND window, int screen_width, int screen_height));
-EXPORT(void ConfigureDriver(HWND parent));
+EXPORT(void  ConfigureDriver(HWND parent));
+
+
 
 #include "../api.h"
 #endif

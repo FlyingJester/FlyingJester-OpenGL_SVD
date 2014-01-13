@@ -54,14 +54,15 @@ using namespace FJ::Thread;
 /////
 // A wrapper to the specified thread backend.
 
-template<typename R, typename ...A>thread_t CreateThread(R(*ThreadFunc)(A...), A ...args){
-    std::function<R(A...)>func(ThreadFunc);
+template<typename R, typename ...A>
+FJ::Thread::thread_t FJ::Thread::CreateThread(R(*TF)(A...), A ...args){
+    std::function<R(A...)>func(TF);
 
     //ThreadFunc(std::forward<A> (args)...);
 
-    void(*f)(void) = std::bind(ThreadFunc, std::forward<A> (args)...);
+    void(*f)(void) = std::bind(TF, std::forward<A> (args)...);
 
-    return Internal::StartThread(f);
+    return Internal::StartThread((void(*)(void))f);
 }
 
 void *InternalCall(void *r){
@@ -77,11 +78,11 @@ void *InternalCall(void *r){
 }
 
 #ifdef USE_PTHREAD_THREADS
-thread_t Internal::StartThread(void(*function)(void)){
+thread_t FJ::Thread::Internal::StartThread(void(*function)(void)){
     pthread_t thread;
     voidFunc *f = new voidFunc;
 
-    *f = function;
+    f[0] = function;
 
     //std::function<void(void *)>passfunc = [](void *r){void(*function)(void) = reinterpret_cast<void(*)(void)>(r); function();};
 
@@ -93,11 +94,11 @@ thread_t Internal::StartThread(void(*function)(void)){
 
 }
 
-void ExitThread(void){
+void FJ::Thread::ExitThread(void){
     pthread_exit(NULL);
 }
 
-void WaitThread(thread_t thread){
+void FJ::Thread::WaitThread(thread_t thread){
     pthread_join(thread, NULL);
 }
 #endif

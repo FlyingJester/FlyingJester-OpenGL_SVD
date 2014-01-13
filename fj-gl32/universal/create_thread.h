@@ -19,7 +19,8 @@ namespace FJ{
         // CreateThread<void *, void *, const void *, size_t>(&memcpy, a, b, n);
         //   or even CreateThread(&memcpy, a, b, n);
 
-        template<typename R, typename ...A>thread_t CreateThread(R(*ThreadFunc)(A...), A ...args);
+        template<typename R, typename ...A>
+        thread_t CreateThread(R(*ThreadFunc)(A...), A ...args);
 
 
         void WaitThread(thread_t);

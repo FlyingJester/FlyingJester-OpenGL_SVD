@@ -10,6 +10,16 @@ void FJ::GLstate::texture::resetSetup(void){
 }
 
 void FJ::GLstate::texture::textureSetup(void){
+
+    unsigned int m[] = {
+        0xFFFFFFFF,
+        0xFFFFFFFF,
+        0xFFFFFFFF,
+        0xFFFFFFFF
+    };
+
+	glColorPointer(4, GL_UNSIGNED_BYTE, 0, m);
+
 	lastSetup = FJ::eTexture;
 }
 

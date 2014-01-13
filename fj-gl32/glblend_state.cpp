@@ -7,11 +7,11 @@ using FJ::Sphere::BlendMode;
 
 FJ::Sphere::BlendMode FJ::GLstate::blendmode::lastMode = FJ::Sphere::bmNone;
 
-void resetBlendMode(void){
+void FJ::GLstate::blendmode::resetBlendMode(void){
     FJ::GLstate::blendmode::lastMode = FJ::Sphere::bmNone;
 }
 
-void setBlendMode(FJ::Sphere::BlendMode mode){
+void FJ::GLstate::blendmode::setBlendMode(FJ::Sphere::BlendMode mode){
     if ((FJ::GLstate::blendmode::lastMode == mode)||(mode == FJ::Sphere::BlendMode::bmNone))
         return;
 

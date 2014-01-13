@@ -76,7 +76,6 @@ namespace FJ{
 
 typedef  FJ::Image* IMAGE;
 
-extern "C" {
     EXPORT(void GetDriverInfo(FJ::Sphere::DriverInfo_t* driverinfo));
 
     EXPORT(void CloseVideoDriver(void));
@@ -92,7 +91,7 @@ extern "C" {
     EXPORT(void DestroyImage(IMAGE image));
     EXPORT(void BlitImage(IMAGE image, int x, int y, FJ::Sphere::BlendMode blendmode));
     EXPORT(void BlitImageMask(IMAGE image, int x, int y, FJ::Sphere::BlendMode blendmode, RGBA mask, FJ::Sphere::BlendMode mask_blendmode));
-    EXPORT(void TransformBlitImage(IMAGE image, int x[4], int y[4], int blendmode));
+    EXPORT(void TransformBlitImage(IMAGE image, int *x, int *y, FJ::Sphere::BlendMode blendmode));
     EXPORT(void TransformBlitImageMask(IMAGE image, int x[4], int y[4], FJ::Sphere::BlendMode blendmode, RGBA mask, FJ::Sphere::BlendMode mask_blendmode));
     EXPORT(int GetImageWidth(IMAGE image));
     EXPORT(int GetImageHeight(IMAGE image));
@@ -122,7 +121,7 @@ extern "C" {
     EXPORT(void DrawOutlinedCircle(int x, int y, int r, RGBA color, int antialias));
     EXPORT(void DrawFilledCircle(int x, int y, int r, RGBA color, int antialias));
     EXPORT(void DrawGradientCircle(int x, int y, int r, RGBA colors[2], int antialias));
-}
+
 namespace FJ {
 
     void Sleep(unsigned int milliseconds);
@@ -155,7 +154,8 @@ namespace FJ {
 
 	class Primitive{
 	public:
-
+        ~Primitive();
+        Primitive();
 		virtual void drawGL(void) = 0;
 		void setupGL(void);
 		virtual void textureSetup() = 0;
@@ -231,6 +231,9 @@ namespace FJ {
 			virtual unsigned int getTexture(void) const;
 			virtual int getWidth(void) const;
 			virtual int getHeight(void) const;
+		};
+		struct UnsafeImage : public Image{
+			~UnsafeImage();
 		};
 
 	}

@@ -11,7 +11,7 @@
 #warning Including a Linux-specific header on a different (non-Windows) platform.
 #endif
 
-#define EXPORT(x) extern "C" x
+#define EXPORT(x) extern "C" __attribute__ ((noinline)) x
 
 #include <X11/Xlib.h>
 #include <GL/gl.h>
@@ -22,10 +22,14 @@ namespace FJ{
         extern Display *display;
         extern Window window;
         extern GLXContext glc;
+        extern GLXContext glcMain;
+        extern GLXWindow glxwindow;
     }
 }
 
 EXPORT(bool InitVideo(int w, int h, std::string sphere_dir));
+
+#pragma comment(linker, "/export:TransformBlitImage")
 
 #include "../api.h"
 #endif
